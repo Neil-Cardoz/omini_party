@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "npm run build --workspace shared && npm run build --workspace server && npm run build --workspace client",
-    "test": "vitest run",
+    "test": "npm run build --workspace shared && vitest run",
     "test:watch": "vitest",
     "typecheck": "npm run typecheck --workspace shared && npm run typecheck --workspace server && npm run typecheck --workspace client",
     "lint": "eslint .",

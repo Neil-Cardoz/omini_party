@@ -16,17 +16,17 @@ export interface PlanningContext {
   guestCount: number;
   ageMix: AgeMix;
   budgetTier: BudgetTier;
-  budget?: number;
+  budget?: number | undefined;
   cityIndex: number;
   date: string;
   referenceDate: string;
   durationHours: number;
   diet: string[];
-  culture?: string;
+  culture?: string | undefined;
   alcoholPref: AlcoholPreference;
   indoorOutdoor: IndoorOutdoor;
   formality: 'casual' | 'smart-casual' | 'formal';
-  cuisine?: string;
+  cuisine?: string | undefined;
 }
 
 export interface RuleDecision<T> {

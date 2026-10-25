@@ -74,6 +74,11 @@ function userId(request: AuthenticatedRequest): string {
   return request.userId!;
 }
 
+function routeParam(request: express.Request, name: string): string {
+  const value = request.params[name];
+  return typeof value === 'string' ? value : '';
+}
+
 function validationError(response: express.Response, result: z.SafeParseError<unknown>): void {
   response.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Please check the highlighted fields.', fields: result.error.flatten().fieldErrors } });
 }
@@ -158,7 +163,7 @@ export const createApp = (options: AppOptions = {}) => {
   });
 
   app.get('/api/v1/parties/:id', requireAuth, (request: AuthenticatedRequest, response) => {
-    const party = database.getParty(userId(request), request.params.id);
+    const party = database.getParty(userId(request), routeParam(request, 'id'));
     if (!party) {
       response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
       return;
@@ -169,7 +174,7 @@ export const createApp = (options: AppOptions = {}) => {
   app.patch('/api/v1/parties/:id', requireAuth, (request: AuthenticatedRequest, response) => {
     const parsed = partySchema.partial().safeParse(request.body);
     if (!parsed.success) return validationError(response, parsed);
-    const party = database.updateParty(userId(request), request.params.id, parsed.data);
+    const party = database.updateParty(userId(request), routeParam(request, 'id'), parsed.data);
     if (!party) {
       response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
       return;
@@ -178,7 +183,7 @@ export const createApp = (options: AppOptions = {}) => {
   });
 
   app.delete('/api/v1/parties/:id', requireAuth, (request: AuthenticatedRequest, response) => {
-    if (!database.deleteParty(userId(request), request.params.id)) {
+    if (!database.deleteParty(userId(request), routeParam(request, 'id'))) {
       response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
       return;
     }
@@ -188,7 +193,7 @@ export const createApp = (options: AppOptions = {}) => {
   app.put('/api/v1/parties/:id/wizard', requireAuth, (request: AuthenticatedRequest, response) => {
     const parsed = wizardSchema.safeParse(request.body);
     if (!parsed.success) return validationError(response, parsed);
-    const party = database.getParty(userId(request), request.params.id);
+    const party = database.getParty(userId(request), routeParam(request, 'id'));
     if (!party) {
       response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
       return;
@@ -207,7 +212,7 @@ export const createApp = (options: AppOptions = {}) => {
   });
 
   app.post('/api/v1/parties/:id/generate', requireAuth, (request: AuthenticatedRequest, response) => {
-    const party = database.getParty(userId(request), request.params.id);
+    const party = database.getParty(userId(request), routeParam(request, 'id'));
     if (!party) {
       response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
       return;
@@ -241,29 +246,30 @@ export const createApp = (options: AppOptions = {}) => {
       bar: ['Full bar', 'Beer and wine', 'Signature cocktails', 'Mocktail bar', 'None'],
       invites: ['Formal', 'Fun', 'Minimal'],
     };
-    response.json({ step: _request.params.step, suggestions: suggestions[_request.params.step] ?? [] });
+    const step = routeParam(_request, 'step');
+    response.json({ step, suggestions: suggestions[step] ?? [] });
   });
 
   app.get('/api/v1/parties/:id/tasks', requireAuth, (request: AuthenticatedRequest, response) => {
-    const party = database.getParty(userId(request), request.params.id);
+    const party = database.getParty(userId(request), routeParam(request, 'id'));
     if (!party) return response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
     response.json({ tasks: database.listTasks(party.id) });
   });
 
   app.get('/api/v1/parties/:id/budget', requireAuth, (request: AuthenticatedRequest, response) => {
-    const party = database.getParty(userId(request), request.params.id);
+    const party = database.getParty(userId(request), routeParam(request, 'id'));
     if (!party) return response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
     response.json({ budget: database.listBudgetItems(party.id) });
   });
 
   app.get('/api/v1/parties/:id/guests', requireAuth, (request: AuthenticatedRequest, response) => {
-    const party = database.getParty(userId(request), request.params.id);
+    const party = database.getParty(userId(request), routeParam(request, 'id'));
     if (!party) return response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
     response.json({ guests: database.listGuests(party.id) });
   });
 
   app.post('/api/v1/parties/:id/guests', requireAuth, (request: AuthenticatedRequest, response) => {
-    const party = database.getParty(userId(request), request.params.id);
+    const party = database.getParty(userId(request), routeParam(request, 'id'));
     const input = z.object({ name: z.string().trim().min(1).max(120), email: z.string().email().max(160).optional(), diet: z.string().max(40).optional() }).safeParse(request.body);
     if (!party) return response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
     if (!input.success) return validationError(response, input);

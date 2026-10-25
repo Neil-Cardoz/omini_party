@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
+import type * as NodeSqlite from 'node:sqlite';
 import bcrypt from 'bcryptjs';
 import type { EventType, PartyInput, ProfileInput } from '@celebraitions/shared';
+
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof NodeSqlite;
 
 export interface UserRecord {
   id: string;
@@ -46,6 +49,19 @@ export interface GuestRecord {
   rsvp: string;
   plusOneAllowed: boolean;
   checkedInAt: string | null;
+}
+
+export interface PartyUpdateInput {
+  type?: EventType | undefined;
+  name?: string | undefined;
+  honoree?: string | undefined;
+  date?: string | undefined;
+  endTime?: string | undefined;
+  status?: string | undefined;
+  guestCount?: number | undefined;
+  budgetTotal?: number | undefined;
+  currency?: string | undefined;
+  wizardState?: Record<string, unknown> | undefined;
 }
 
 const schema = `
@@ -130,7 +146,7 @@ function parseJson<T>(value: unknown, fallback: T): T {
 }
 
 export class PartyDatabase {
-  readonly db: DatabaseSync;
+  readonly db: NodeSqlite.DatabaseSync;
 
   constructor(filename = ':memory:') {
     this.db = new DatabaseSync(filename);
@@ -255,10 +271,21 @@ export class PartyDatabase {
     return this.getParty(ownerId, id)!;
   }
 
-  updateParty(ownerId: string, id: string, values: Partial<PartyInput> & { status?: string }): PartyRecord | undefined {
+  updateParty(ownerId: string, id: string, values: PartyUpdateInput): PartyRecord | undefined {
     const party = this.getParty(ownerId, id);
     if (!party) return undefined;
-    const next = { ...party, ...values };
+    const next = {
+      type: values.type ?? party.type,
+      name: values.name ?? party.name,
+      honoree: values.honoree ?? party.honoree,
+      date: values.date ?? party.date,
+      endTime: values.endTime ?? party.endTime,
+      status: values.status ?? party.status,
+      guestCount: values.guestCount ?? party.guestCount,
+      budgetTotal: values.budgetTotal ?? party.budgetTotal,
+      currency: values.currency ?? party.currency,
+      wizardState: values.wizardState ?? party.wizardState,
+    };
     this.db
       .prepare(`UPDATE parties SET type = ?, name = ?, honoree = ?, date = ?, end_time = ?, status = ?, guest_count = ?, budget_total = ?, currency = ?, wizard_state = ?, updated_at = ? WHERE owner_id = ? AND id = ?`)
       .run(next.type, next.name, next.honoree, next.date, next.endTime, next.status, next.guestCount, next.budgetTotal, next.currency, JSON.stringify(next.wizardState), new Date().toISOString(), ownerId, id);
