@@ -7,6 +7,7 @@ import { DashboardPage } from './pages/DashboardPage.js';
 import { PartyDetailPage } from './pages/PartyDetailPage.js';
 import { ReportPage } from './pages/ReportPage.js';
 import { WizardPage } from './pages/WizardPage.js';
+import { CheckinPage, RsvpPage } from './pages/InvitePages.js';
 
 export interface AuthContextValue {
   user: User | null;
@@ -32,6 +33,7 @@ export function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<AuthPage setUser={setUser} />} />
+        <Route path="/rsvp/:token" element={<RsvpPage />} />
         <Route element={<ProtectedLayout user={user} setUser={setUser} />}>
           <Route path="/" element={<HomeRedirect user={user} />} />
           <Route path="/onboarding" element={<OnboardingPage setUser={setUser} />} />
@@ -40,6 +42,7 @@ export function App() {
           <Route path="/party/:id/edit" element={<WizardPage />} />
           <Route path="/party/:id" element={<PartyDetailPage />} />
           <Route path="/party/:id/report" element={<ReportPage />} />
+          <Route path="/party/:id/checkin" element={<CheckinPage />} />
         </Route>
         <Route path="*" element={<Navigate to={user ? '/' : '/login'} replace />} />
       </Routes>

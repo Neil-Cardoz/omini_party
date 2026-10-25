@@ -21,6 +21,7 @@ import {
 import { PartyDatabase, type PartyRecord } from './db/database.js';
 import { clearSession, requireAuth, setSession, type AuthenticatedRequest } from './middleware/auth.js';
 import { errorHandler } from './middleware/errors.js';
+import { createEntryToken, verifyEntryToken } from './services/inviteService.js';
 
 const estimateSchema = z.object({
   eventType: partySchema.shape.type,
@@ -36,6 +37,16 @@ const estimateSchema = z.object({
   formality: z.enum(['casual', 'smart-casual', 'formal']).default('smart-casual'),
   referenceDate: z.string().date().optional(),
 });
+
+const rsvpSchema = z.object({
+  rsvp: z.enum(['yes', 'maybe', 'no']),
+  plusOneName: z.string().trim().max(120).optional(),
+  plusOneDiet: z.string().trim().max(40).optional(),
+  kidsCount: z.number().int().min(0).max(20).default(0),
+  message: z.string().trim().max(500).optional(),
+});
+
+const checkinSchema = z.object({ entryToken: z.string().min(10) });
 
 const jsonObject = (value: unknown): Record<string, unknown> => (value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {});
 
@@ -251,6 +262,26 @@ export const createApp = (options: AppOptions = {}) => {
     response.json({ step, suggestions: suggestions[step] ?? [] });
   });
 
+  app.get('/api/v1/public/rsvp/:token', (request, response) => {
+    const invite = database.getGuestByToken(routeParam(request, 'token'));
+    if (!invite) {
+      response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Invite not found.' } });
+      return;
+    }
+    response.json({ invite: { guestName: invite.name, rsvp: invite.rsvp, diet: invite.diet, plusOneName: invite.plusOneName, message: invite.message, party: { id: invite.party.id, name: invite.party.name, type: invite.party.type, honoree: invite.party.honoree, date: invite.party.date, endTime: invite.party.endTime, guestCount: invite.party.guestCount } } });
+  });
+
+  app.post('/api/v1/public/rsvp/:token', (request, response) => {
+    const parsed = rsvpSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(response, parsed);
+    const invite = database.updateGuestRsvp(routeParam(request, 'token'), parsed.data);
+    if (!invite) {
+      response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Invite not found.' } });
+      return;
+    }
+    response.json({ invite: { guestName: invite.name, rsvp: invite.rsvp, party: { id: invite.party.id, name: invite.party.name, date: invite.party.date, endTime: invite.party.endTime }, entryToken: parsed.data.rsvp === 'yes' ? createEntryToken(invite.id, invite.party.id) : undefined } });
+  });
+
   app.get('/api/v1/parties/:id/tasks', requireAuth, (request: AuthenticatedRequest, response) => {
     const party = database.getParty(userId(request), routeParam(request, 'id'));
     if (!party) return response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
@@ -275,6 +306,38 @@ export const createApp = (options: AppOptions = {}) => {
     if (!party) return response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
     if (!input.success) return validationError(response, input);
     response.status(201).json({ guest: database.createGuest(party.id, input.data.name, input.data.email, input.data.diet) });
+  });
+
+  app.get('/api/v1/parties/:id/guests/:guestId/invite', requireAuth, (request: AuthenticatedRequest, response) => {
+    const party = database.getParty(userId(request), routeParam(request, 'id'));
+    if (!party) return response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
+    const guest = database.getGuestById(party.id, routeParam(request, 'guestId'));
+    if (!guest) return response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Guest not found.' } });
+    response.json({ inviteToken: guest.inviteToken, entryToken: createEntryToken(guest.id, party.id) });
+  });
+
+  app.post('/api/v1/parties/:id/checkin', requireAuth, (request: AuthenticatedRequest, response) => {
+    const parsed = checkinSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(response, parsed);
+    const party = database.getParty(userId(request), routeParam(request, 'id'));
+    if (!party) return response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
+    const verified = verifyEntryToken(parsed.data.entryToken);
+    if (!verified || verified.partyId !== party.id) return response.status(400).json({ error: { code: 'INVALID_INVITE', message: 'Invalid invite.' } });
+    const result = database.checkInGuest(party.id, verified.guestId);
+    if (!result) return response.status(400).json({ error: { code: 'INVALID_INVITE', message: 'Invalid invite.' } });
+    if (result.status === 'already-checked-in') return response.status(409).json({ error: { code: 'ALREADY_CHECKED_IN', message: 'This invite has already been checked in.', checkedInAt: result.guest.checkedInAt } });
+    response.json({ status: result.status, guest: { name: result.guest.name, plusOneName: result.guest.plusOneName } });
+  });
+
+  app.get('/api/v1/parties/:id/ics', requireAuth, (request: AuthenticatedRequest, response) => {
+    const party = database.getParty(userId(request), routeParam(request, 'id'));
+    if (!party) return response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
+    const date = party.date.replaceAll('-', '');
+    const time = party.endTime.replace(':', '') + '00';
+    const body = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//celebrAItions//EN', 'BEGIN:VEVENT', `UID:${party.id}@celebraitions`, `DTSTAMP:${new Date().toISOString().replaceAll(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')}`, `DTSTART:${date}T120000`, `DTEND:${date}T${time}`, `SUMMARY:${party.name}`, `DESCRIPTION:Planned with celebrAItions`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    response.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    response.setHeader('Content-Disposition', `attachment; filename="${party.name.replaceAll(/[^a-z0-9]+/gi, '-').toLowerCase()}.ics"`);
+    response.send(body);
   });
 
   app.use(errorHandler);

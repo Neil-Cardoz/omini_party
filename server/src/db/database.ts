@@ -48,6 +48,11 @@ export interface GuestRecord {
   diet: string;
   rsvp: string;
   plusOneAllowed: boolean;
+  inviteToken: string;
+  plusOneName: string;
+  plusOneDiet: string;
+  kidsCount: number;
+  message: string;
   checkedInAt: string | null;
 }
 
@@ -130,6 +135,11 @@ const schema = `
     diet TEXT NOT NULL DEFAULT '',
     rsvp TEXT NOT NULL DEFAULT 'pending',
     plus_one_allowed INTEGER NOT NULL DEFAULT 0,
+    invite_token TEXT UNIQUE,
+    plus_one_name TEXT NOT NULL DEFAULT '',
+    plus_one_diet TEXT NOT NULL DEFAULT '',
+    kids_count INTEGER NOT NULL DEFAULT 0,
+    message TEXT NOT NULL DEFAULT '',
     checked_in_at TEXT
   );
   CREATE INDEX IF NOT EXISTS parties_owner_date ON parties(owner_id, date);
@@ -151,6 +161,27 @@ export class PartyDatabase {
   constructor(filename = ':memory:') {
     this.db = new DatabaseSync(filename);
     this.db.exec(schema);
+    this.migrateGuests();
+  }
+
+  private migrateGuests(): void {
+    const migrations = [
+      'ALTER TABLE guests ADD COLUMN invite_token TEXT',
+      "ALTER TABLE guests ADD COLUMN plus_one_name TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE guests ADD COLUMN plus_one_diet TEXT NOT NULL DEFAULT ''",
+      'ALTER TABLE guests ADD COLUMN kids_count INTEGER NOT NULL DEFAULT 0',
+      "ALTER TABLE guests ADD COLUMN message TEXT NOT NULL DEFAULT ''",
+    ];
+    for (const migration of migrations) {
+      try {
+        this.db.exec(migration);
+      } catch {
+        // The column already exists in a database created by a newer schema.
+      }
+    }
+    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS guests_invite_token ON guests(invite_token)');
+    const rows = this.db.prepare('SELECT id FROM guests WHERE invite_token IS NULL').all() as Array<Record<string, unknown>>;
+    for (const row of rows) this.db.prepare('UPDATE guests SET invite_token = ? WHERE id = ?').run(randomUUID(), String(row.id));
   }
 
   close(): void {
@@ -338,13 +369,41 @@ export class PartyDatabase {
 
   createGuest(partyId: string, name: string, email = '', diet = ''): GuestRecord {
     const id = randomUUID();
-    this.db.prepare('INSERT INTO guests (id, party_id, name, email, diet) VALUES (?, ?, ?, ?, ?)').run(id, partyId, name, email, diet);
+    this.db.prepare('INSERT INTO guests (id, party_id, name, email, diet, invite_token) VALUES (?, ?, ?, ?, ?, ?)').run(id, partyId, name, email, diet, randomUUID());
     return this.getGuest(id)!;
   }
 
   listGuests(partyId: string): GuestRecord[] {
-    const rows = this.db.prepare('SELECT id, party_id, name, email, diet, rsvp, plus_one_allowed, checked_in_at FROM guests WHERE party_id = ? ORDER BY name').all(partyId) as Array<Record<string, unknown>>;
+    const rows = this.db.prepare('SELECT id, party_id, name, email, diet, rsvp, plus_one_allowed, invite_token, plus_one_name, plus_one_diet, kids_count, message, checked_in_at FROM guests WHERE party_id = ? ORDER BY name').all(partyId) as Array<Record<string, unknown>>;
     return rows.map((row) => this.toGuest(row));
+  }
+
+  getGuestByToken(token: string): (GuestRecord & { party: PartyRecord }) | undefined {
+    const row = this.db.prepare(`SELECT g.id, g.party_id, g.name, g.email, g.diet, g.rsvp, g.plus_one_allowed, g.invite_token, g.plus_one_name, g.plus_one_diet, g.kids_count, g.message, g.checked_in_at, p.id AS p_id, p.owner_id, p.type, p.name AS p_name, p.honoree, p.date, p.end_time, p.status, p.guest_count, p.budget_total, p.currency, p.wizard_state, p.created_at, p.updated_at FROM guests g JOIN parties p ON p.id = g.party_id WHERE g.invite_token = ?`).get(token) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    const guest = this.toGuest(row);
+    return {
+      ...guest,
+      party: this.toParty({ id: row.p_id, owner_id: row.owner_id, type: row.type, name: row.p_name, honoree: row.honoree, date: row.date, end_time: row.end_time, status: row.status, guest_count: row.guest_count, budget_total: row.budget_total, currency: row.currency, wizard_state: row.wizard_state, created_at: row.created_at, updated_at: row.updated_at }),
+    };
+  }
+
+  updateGuestRsvp(token: string, values: { rsvp: string; plusOneName?: string | undefined; plusOneDiet?: string | undefined; kidsCount?: number | undefined; message?: string | undefined }): (GuestRecord & { party: PartyRecord }) | undefined {
+    this.db.prepare('UPDATE guests SET rsvp = ?, plus_one_name = ?, plus_one_diet = ?, kids_count = ?, message = ? WHERE invite_token = ?').run(values.rsvp, values.plusOneName ?? '', values.plusOneDiet ?? '', values.kidsCount ?? 0, values.message ?? '', token);
+    return this.getGuestByToken(token);
+  }
+
+  getGuestById(partyId: string, guestId: string): GuestRecord | undefined {
+    const row = this.db.prepare('SELECT id, party_id, name, email, diet, rsvp, plus_one_allowed, invite_token, plus_one_name, plus_one_diet, kids_count, message, checked_in_at FROM guests WHERE party_id = ? AND id = ?').get(partyId, guestId) as Record<string, unknown> | undefined;
+    return row ? this.toGuest(row) : undefined;
+  }
+
+  checkInGuest(partyId: string, guestId: string): { status: 'checked-in' | 'already-checked-in'; guest: GuestRecord } | undefined {
+    const guest = this.getGuestById(partyId, guestId);
+    if (!guest) return undefined;
+    if (guest.checkedInAt) return { status: 'already-checked-in', guest };
+    this.db.prepare('UPDATE guests SET checked_in_at = ? WHERE party_id = ? AND id = ?').run(new Date().toISOString(), partyId, guestId);
+    return { status: 'checked-in', guest: this.getGuestById(partyId, guestId)! };
   }
 
   private getTask(id: string): TaskRecord | undefined {
@@ -353,7 +412,7 @@ export class PartyDatabase {
   }
 
   private getGuest(id: string): GuestRecord | undefined {
-    const row = this.db.prepare('SELECT id, party_id, name, email, diet, rsvp, plus_one_allowed, checked_in_at FROM guests WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    const row = this.db.prepare('SELECT id, party_id, name, email, diet, rsvp, plus_one_allowed, invite_token, plus_one_name, plus_one_diet, kids_count, message, checked_in_at FROM guests WHERE id = ?').get(id) as Record<string, unknown> | undefined;
     return row ? this.toGuest(row) : undefined;
   }
 
@@ -397,6 +456,11 @@ export class PartyDatabase {
       diet: String(row.diet),
       rsvp: String(row.rsvp),
       plusOneAllowed: Boolean(row.plus_one_allowed),
+      inviteToken: String(row.invite_token ?? ''),
+      plusOneName: String(row.plus_one_name ?? ''),
+      plusOneDiet: String(row.plus_one_diet ?? ''),
+      kidsCount: Number(row.kids_count ?? 0),
+      message: String(row.message ?? ''),
       checkedInAt: row.checked_in_at ? String(row.checked_in_at) : null,
     };
   }

@@ -307,6 +307,27 @@ th { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; }
 .report-columns p { color: var(--muted); line-height: 1.55; }
 .report-callout { background: #fff5e7; border-radius: 0.7rem; color: var(--muted); font-size: 0.78rem; line-height: 1.45; padding: 1rem; }
 .report-footer { color: var(--muted); font-size: 0.7rem; padding-top: 1rem; }
+.rsvp-shell { align-items: center; background: radial-gradient(circle at 15% 15%, #fbd6d0 0, transparent 23rem), radial-gradient(circle at 85% 85%, #dcebd4 0, transparent 24rem), var(--cream); display: flex; justify-content: center; min-height: 100vh; padding: 2rem 1rem; }
+.rsvp-card { background: rgb(255 253 249 / 0.92); border: 1px solid var(--line); border-radius: 1.4rem; box-shadow: var(--shadow); max-width: 560px; padding: clamp(1.5rem, 6vw, 3rem); width: 100%; }
+.rsvp-hero { border-bottom: 1px solid var(--line); margin: 3rem 0 1.7rem; padding-bottom: 1.7rem; }
+.rsvp-hero h1 { margin: 0.7rem 0 0.55rem; }
+.rsvp-hero p { margin-bottom: 0.35rem; }
+.rsvp-form { display: grid; gap: 1.1rem; }
+.rsvp-form textarea { background: white; border: 1px solid #dfd1c8; border-radius: 0.7rem; color: var(--ink); padding: 0.7rem 0.8rem; resize: vertical; width: 100%; }
+.rsvp-options { display: grid; gap: 0.55rem; grid-template-columns: repeat(3, 1fr); }
+.rsvp-option { background: white; border: 1px solid var(--line); border-radius: 0.7rem; color: var(--muted); font-size: 0.78rem; font-weight: 800; min-height: 3rem; padding: 0.6rem; }
+.rsvp-option.active { background: #fff0eb; border-color: var(--coral); color: var(--coral-dark); }
+.rsvp-success { text-align: center; }
+.success-mark { align-items: center; background: var(--sage); border-radius: 50%; color: #527153; display: inline-flex; font-size: 2rem; height: 4rem; justify-content: center; width: 4rem; }
+.entry-token { background: var(--ink); border-radius: 0.8rem; color: white; display: grid; gap: 0.45rem; margin: 1.5rem 0; padding: 1rem; text-align: left; }
+.entry-token span { color: #f4b3a7; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
+.entry-token code { font-size: 0.7rem; overflow-wrap: anywhere; }
+.entry-token small { color: #d9cbd1; }
+.checkin-page { min-height: 80vh; }
+.checkin-card { background: var(--paper); border: 1px solid var(--line); border-radius: 1.2rem; margin: 4rem auto; max-width: 560px; padding: 2rem; }
+.checkin-card h1 { margin-top: 0.7rem; }
+.checkin-card form { display: grid; gap: 1rem; margin-top: 2rem; }
+.checkin-success { background: var(--sage); border: 1px solid #bbd0b3; border-radius: 0.7rem; color: #527153; margin-top: 1rem; padding: 0.8rem; }
 
 @media (max-width: 1050px) {
   .party-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -339,6 +360,9 @@ th { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; }
   .big-input-row { align-items: start; flex-direction: column; }
   .detail-actions { width: 100%; }
   .detail-actions button { flex: 1; }
+  .rsvp-options { grid-template-columns: 1fr; }
+  .ideas-grid { grid-template-columns: 1fr; }
+  .menu-dishes { grid-template-columns: 1fr; }
   .report-paper { padding: 1.5rem; }
   .report-cover { min-height: 360px; }
   .report-cover .brand { margin-bottom: 5rem; }

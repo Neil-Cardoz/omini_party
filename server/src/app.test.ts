@@ -73,4 +73,23 @@ describe('celebrAItions API', () => {
 
     await secondAgent.get(`/api/v1/parties/${created.body.party.id}`).expect(404);
   });
+
+  it('creates a public RSVP invite and rejects duplicate check-in', async () => {
+    const app = testApp();
+    const agent = request.agent(app);
+    await agent.post('/api/v1/auth/demo').expect(200);
+    const created = await agent
+      .post('/api/v1/parties')
+      .send({ type: 'birthday', name: 'Invite Party', date: '2026-08-22', endTime: '18:00', guestCount: 10, currency: 'USD', wizardState: {} })
+      .expect(201);
+    const guest = await agent.post(`/api/v1/parties/${created.body.party.id}/guests`).send({ name: 'Sam Guest', email: 'sam@example.com' }).expect(201);
+    const inviteToken = guest.body.guest.inviteToken as string;
+
+    await request(app).get(`/api/v1/public/rsvp/${inviteToken}`).expect(200);
+    const response = await request(app).post(`/api/v1/public/rsvp/${inviteToken}`).send({ rsvp: 'yes' }).expect(200);
+    const entryToken = response.body.invite.entryToken as string;
+
+    await agent.post(`/api/v1/parties/${created.body.party.id}/checkin`).send({ entryToken }).expect(200);
+    await agent.post(`/api/v1/parties/${created.body.party.id}/checkin`).send({ entryToken }).expect(409);
+  });
 });

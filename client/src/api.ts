@@ -44,6 +44,11 @@ export interface Guest {
   diet: string;
   rsvp: string;
   plusOneAllowed: boolean;
+  inviteToken: string;
+  plusOneName: string;
+  plusOneDiet: string;
+  kidsCount: number;
+  message: string;
   checkedInAt: string | null;
 }
 
@@ -122,4 +127,8 @@ export const api = {
   generate: (id: string) => request<{ party: Party; recommendations: Recommendations; estimate: Estimate }>(`/parties/${id}/generate`, json({})),
   estimate: (body: Record<string, unknown>) => request<{ estimate: Estimate; recommendations: Recommendations }>('/estimate', json(body)),
   addGuest: (id: string, body: { name: string; email?: string | undefined; diet?: string | undefined }) => request<{ guest: Guest }>(`/parties/${id}/guests`, json(body)),
+  invite: (partyId: string, guestId: string) => request<{ inviteToken: string; entryToken: string }>(`/parties/${partyId}/guests/${guestId}/invite`),
+  publicInvite: (token: string) => request<{ invite: { guestName: string; rsvp: string; diet: string; plusOneName: string; message: string; party: { id: string; name: string; type: string; honoree: string; date: string; endTime: string; guestCount: number } } }>(`/public/rsvp/${token}`),
+  respondToInvite: (token: string, body: { rsvp: 'yes' | 'maybe' | 'no'; plusOneName?: string | undefined; plusOneDiet?: string | undefined; kidsCount?: number | undefined; message?: string | undefined }) => request<{ invite: { guestName: string; rsvp: string; entryToken?: string; party: { id: string; name: string; date: string; endTime: string } } }>(`/public/rsvp/${token}`, json(body)),
+  checkIn: (partyId: string, entryToken: string) => request<{ status: string; guest: { name: string; plusOneName: string } }>(`/parties/${partyId}/checkin`, json({ entryToken })),
 };
