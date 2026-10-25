@@ -57,7 +57,7 @@ export const wizardSchema = z.object({
     }),
   ),
   version: z.number().int().min(1),
-});
+}).passthrough();
 
 export const expenseSchema = z.object({
   category: z.string().min(1).max(60),

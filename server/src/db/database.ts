@@ -165,7 +165,7 @@ export class PartyDatabase {
     this.db
       .prepare('INSERT INTO users (id, name, email, password_hash, created_at) VALUES (?, ?, ?, ?, ?)')
       .run(userId, 'Asha Demo', 'demo@celebraitions.app', bcrypt.hashSync('demo1234', 10), new Date().toISOString());
-    this.db.prepare('INSERT INTO user_profiles (user_id) VALUES (?)').run(userId);
+    this.db.prepare('INSERT INTO user_profiles (user_id, onboarded) VALUES (?, 1)').run(userId);
 
     const examples: Array<PartyInput & { status: string }> = [
       {
