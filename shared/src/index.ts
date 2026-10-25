@@ -20,3 +20,4 @@ export const eventTypeLabels: Record<EventType, string> = {
 };
 
 export * from './engine/index.js';
+export * from './schemas.js';
