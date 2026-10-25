@@ -298,8 +298,23 @@ export class PartyDatabase {
   }
 
   saveWizard(ownerId: string, id: string, state: Record<string, unknown>): PartyRecord | undefined {
-    this.db.prepare('UPDATE parties SET wizard_state = ?, status = ?, updated_at = ? WHERE owner_id = ? AND id = ?').run(JSON.stringify(state), 'draft', new Date().toISOString(), ownerId, id);
+    const current = this.getParty(ownerId, id);
+    if (!current) return undefined;
+    const basics = state.basics && typeof state.basics === 'object' ? state.basics as Record<string, unknown> : {};
+    const guests = state.guests && typeof state.guests === 'object' ? state.guests as Record<string, unknown> : {};
+    const nextName = typeof basics.name === 'string' && basics.name.trim() ? basics.name : current.name;
+    const nextHonoree = typeof basics.honoree === 'string' ? basics.honoree : current.honoree;
+    const nextDate = typeof basics.date === 'string' ? basics.date : current.date;
+    const nextGuestCount = typeof guests.count === 'number' && guests.count > 0 ? guests.count : current.guestCount;
+    const budget = typeof state.budget === 'object' && state.budget ? state.budget as Record<string, unknown> : {};
+    const nextBudget = typeof budget.total === 'number' ? budget.total : current.budgetTotal;
+    this.db.prepare('UPDATE parties SET name = ?, honoree = ?, date = ?, guest_count = ?, budget_total = ?, wizard_state = ?, status = ?, updated_at = ? WHERE owner_id = ? AND id = ?').run(nextName, nextHonoree, nextDate, nextGuestCount, nextBudget, JSON.stringify(state), 'draft', new Date().toISOString(), ownerId, id);
     return this.getParty(ownerId, id);
+  }
+
+  clearPlanData(partyId: string): void {
+    this.db.prepare('DELETE FROM tasks WHERE party_id = ?').run(partyId);
+    this.db.prepare('DELETE FROM budget_items WHERE party_id = ?').run(partyId);
   }
 
   addTask(partyId: string, category: string, title: string, dueDate: string, priority: string): TaskRecord {

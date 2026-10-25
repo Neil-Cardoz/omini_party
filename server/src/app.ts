@@ -221,6 +221,7 @@ export const createApp = (options: AppOptions = {}) => {
     const recommendations = buildEventRecommendations(context);
     const timeline = buildTimeline({ eventType: party.type, eventDate: party.date, referenceDate: context.referenceDate, guestCount: party.guestCount });
     const estimate = estimateCost({ context, barOption: recommendations.bar.defaultOption, digitalInvites: true });
+    database.clearPlanData(party.id);
     for (const task of [...timeline, ...recommendations.tasks.map((title) => ({ title, category: 'Smart recommendations', dueDate: party.date, priority: 'high' as const }))]) {
       database.addTask(party.id, task.category, task.title, task.dueDate, task.priority);
     }

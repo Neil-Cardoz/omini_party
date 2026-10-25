@@ -37,6 +37,7 @@ export function App() {
           <Route path="/onboarding" element={<OnboardingPage setUser={setUser} />} />
           <Route path="/dashboard" element={<DashboardPage user={user!} setUser={setUser} />} />
           <Route path="/party/new" element={<WizardPage />} />
+          <Route path="/party/:id/edit" element={<WizardPage />} />
           <Route path="/party/:id" element={<PartyDetailPage />} />
           <Route path="/party/:id/report" element={<ReportPage />} />
         </Route>

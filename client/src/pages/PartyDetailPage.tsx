@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api, type PartyDetail, type Task } from '../api.js';
 import { formatDate, formatMoney } from '../formatters.js';
 
-type DetailTab = 'overview' | 'tasks' | 'budget' | 'guests' | 'vendors';
+type DetailTab = 'overview' | 'tasks' | 'budget' | 'guests' | 'vendors' | 'menu' | 'timeline' | 'ideas';
 
 export function PartyDetailPage() {
   const { id } = useParams();
@@ -46,7 +46,7 @@ export function PartyDetailPage() {
     setGuestEmail('');
   };
 
-  return <div className="page-wrap detail-page"><button className="back-link" onClick={() => navigate('/dashboard')}>← Party hall</button><section className="detail-hero"><div><div className="eyebrow">{party.type} · {party.status}</div><h1>{party.name}</h1><p className="muted large">{formatDate(party.date)} · {party.endTime} · {party.guestCount} guests</p></div><div className="detail-actions"><button className="secondary-button" onClick={() => navigate(`/party/${party.id}/report`)}>Print report</button><button className="primary-button" onClick={() => navigate('/party/new')}>Edit plan <span>→</span></button></div></section><div className="detail-tabs" role="tablist" aria-label="Party details">{(['overview', 'tasks', 'budget', 'guests', 'vendors'] as DetailTab[]).map((value) => <button key={value} className={tab === value ? 'detail-tab active' : 'detail-tab'} onClick={() => setTab(value)} role="tab" aria-selected={tab === value}>{value.charAt(0).toUpperCase() + value.slice(1)}</button>)}</div>{error && <div className="form-error" role="alert">{error}</div>}{tab === 'overview' && <Overview party={party} totalEstimated={totalEstimated} progress={progress} tasks={tasks} guests={guests.length} />}{tab === 'tasks' && <section className="detail-grid">{groupedTasks.length ? groupedTasks.map(([category, categoryTasks]) => <div className="detail-card task-group" key={category}><div className="card-heading"><h2>{category}</h2><span>{categoryTasks.length} tasks</span></div>{categoryTasks.map((task) => <div className="task-row" key={task.id}><span className={task.status === 'done' ? 'task-box checked' : 'task-box'}>{task.status === 'done' ? '✓' : ''}</span><span><strong>{task.title}</strong><small>Due {formatDate(task.dueDate)}</small></span><em className={task.priority === 'high' ? 'priority high' : 'priority'}>{task.priority}</em></div>)}</div>) : <EmptyDetail title="Your task plan is ready to generate" text="Use the wizard to turn your decisions into a dated checklist." />}</section>}{tab === 'budget' && <BudgetTab budget={budget} totalEstimated={totalEstimated} planned={party.budgetTotal} />}{tab === 'guests' && <GuestsTab guests={guests} guestName={guestName} guestEmail={guestEmail} setGuestName={setGuestName} setGuestEmail={setGuestEmail} onSubmit={addGuest} />}{tab === 'vendors' && <VendorsTab party={party} />}</div>;
+  return <div className="page-wrap detail-page"><button className="back-link" onClick={() => navigate('/dashboard')}>← Party hall</button><section className="detail-hero"><div><div className="eyebrow">{party.type} · {party.status}</div><h1>{party.name}</h1><p className="muted large">{formatDate(party.date)} · {party.endTime} · {party.guestCount} guests</p></div><div className="detail-actions"><button className="secondary-button" onClick={() => navigate(`/party/${party.id}/report`)}>Print report</button><button className="primary-button" onClick={() => navigate(`/party/${party.id}/edit`)}>Edit plan <span>→</span></button></div></section><div className="detail-tabs" role="tablist" aria-label="Party details">{(['overview', 'tasks', 'budget', 'guests', 'vendors', 'menu', 'timeline', 'ideas'] as DetailTab[]).map((value) => <button key={value} className={tab === value ? 'detail-tab active' : 'detail-tab'} onClick={() => setTab(value)} role="tab" aria-selected={tab === value}>{value.charAt(0).toUpperCase() + value.slice(1)}</button>)}</div>{error && <div className="form-error" role="alert">{error}</div>}{tab === 'overview' && <Overview party={party} totalEstimated={totalEstimated} progress={progress} tasks={tasks} guests={guests.length} />}{tab === 'tasks' && <section className="detail-grid">{groupedTasks.length ? groupedTasks.map(([category, categoryTasks]) => <div className="detail-card task-group" key={category}><div className="card-heading"><h2>{category}</h2><span>{categoryTasks.length} tasks</span></div>{categoryTasks.map((task) => <div className="task-row" key={task.id}><span className={task.status === 'done' ? 'task-box checked' : 'task-box'}>{task.status === 'done' ? '✓' : ''}</span><span><strong>{task.title}</strong><small>Due {formatDate(task.dueDate)}</small></span><em className={task.priority === 'high' ? 'priority high' : 'priority'}>{task.priority}</em></div>)}</div>) : <EmptyDetail title="Your task plan is ready to generate" text="Use the wizard to turn your decisions into a dated checklist." />}</section>}{tab === 'budget' && <BudgetTab budget={budget} totalEstimated={totalEstimated} planned={party.budgetTotal} />}{tab === 'guests' && <GuestsTab guests={guests} guestName={guestName} guestEmail={guestEmail} setGuestName={setGuestName} setGuestEmail={setGuestEmail} onSubmit={addGuest} />}{tab === 'vendors' && <VendorsTab party={party} />}{tab === 'menu' && <MenuTab party={party} />}{tab === 'timeline' && <TimelineTab tasks={tasks} />}{tab === 'ideas' && <IdeasTab party={party} />}</div>;
 }
 
 function Overview({ party, totalEstimated, progress, tasks, guests }: { party: PartyDetail['party']; totalEstimated: number; progress: number; tasks: Task[]; guests: number }) {
@@ -67,4 +67,30 @@ function VendorsTab({ party }: { party: PartyDetail['party'] }) {
 
 function EmptyDetail({ title, text }: { title: string; text: string }) {
   return <div className="empty-state"><div className="empty-orbit">✦</div><h2>{title}</h2><p className="muted">{text}</p></div>;
+}
+
+function wizardValue(party: PartyDetail['party'], key: string): Record<string, unknown> {
+  const steps = party.wizardState.steps;
+  const step = steps && typeof steps === 'object' ? (steps as Record<string, unknown>)[key] : undefined;
+  if (!step || typeof step !== 'object') return {};
+  const value = (step as Record<string, unknown>).value;
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+function MenuTab({ party }: { party: PartyDetail['party'] }) {
+  const menu = wizardValue(party, 'menu');
+  const cuisine = typeof menu.cuisine === 'string' ? menu.cuisine : 'Global / mixed';
+  const serviceStyle = typeof menu.serviceStyle === 'string' ? menu.serviceStyle : 'Buffet';
+  const packageName = typeof menu.packageName === 'string' ? menu.packageName : 'Balanced table';
+  return <section className="detail-card"><div className="eyebrow">Food & beverage</div><h2>{packageName}</h2><p className="muted">{cuisine} · {serviceStyle} · planned for {party.guestCount} guests</p><div className="menu-dishes"><span>Seasonal welcome bite</span><span>Shared main course</span><span>Fresh salad and sides</span><span>Celebration dessert</span></div><div className="suggestion-box"><span>✦</span><div><strong>Dietary coverage check</strong><p>Keep one clearly labeled option for every declared preference.</p></div></div></section>;
+}
+
+function TimelineTab({ tasks }: { tasks: Task[] }) {
+  return <section className="detail-card"><div className="eyebrow">Planning timeline</div><h2>From now to the moment</h2><div className="timeline-list">{tasks.map((task) => <div className="timeline-item" key={task.id}><span className="timeline-dot" /><span><strong>{task.title}</strong><small>{task.category} · {formatDate(task.dueDate)}</small></span><em className={task.priority === 'high' ? 'priority high' : 'priority'}>{task.priority}</em></div>)}</div>{!tasks.length && <p className="muted">Generate the plan to build your timeline.</p>}</section>;
+}
+
+function IdeasTab({ party }: { party: PartyDetail['party'] }) {
+  const theme = wizardValue(party, 'theme');
+  const vibe = typeof theme.vibe === 'string' ? theme.vibe : 'Warm and joyful';
+  return <section className="ideas-grid"><div className="detail-card idea-card"><div className="eyebrow">Theme moodboard</div><h2>{vibe}</h2><p>Let the palette show up in one repeatable detail: menus, napkins, florals or the welcome sign.</p><div className="idea-palette"><span /><span /><span /><span /></div></div><div className="detail-card"><div className="eyebrow">Small touches</div><h2>Three ways to make it yours</h2><div className="idea-list"><span>1 <b>Give guests a guided arrival moment.</b></span><span>2 <b>Choose one signature bite or drink.</b></span><span>3 <b>Leave ten minutes unplanned.</b></span></div></div></section>;
 }

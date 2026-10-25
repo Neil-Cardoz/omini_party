@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { api, type Estimate, type Recommendations } from '../api.js';
 
 type StepStatus = 'pending' | 'done' | 'stale';
@@ -58,8 +58,32 @@ function createDefaultDraft(): WizardDraft {
   };
 }
 
+function draftFromState(state: Record<string, unknown>): WizardDraft {
+  const base = createDefaultDraft();
+  const read = <K extends keyof WizardDraft>(key: K): Partial<WizardDraft[K]> => {
+    const value = state[key];
+    return value && typeof value === 'object' ? value as Partial<WizardDraft[K]> : {};
+  };
+  return {
+    ...base,
+    basics: { ...base.basics, ...read('basics') },
+    guests: { ...base.guests, ...read('guests') },
+    budget: { ...base.budget, ...read('budget') },
+    theme: { ...base.theme, ...read('theme') },
+    location: { ...base.location, ...read('location') },
+    menu: { ...base.menu, ...read('menu') },
+    bar: { ...base.bar, ...read('bar') },
+    caterer: { ...base.caterer, ...read('caterer') },
+    attire: { ...base.attire, ...read('attire') },
+    gifts: { ...base.gifts, ...read('gifts') },
+    invites: { ...base.invites, ...read('invites') },
+    diet: Array.isArray(state.diet) ? state.diet.filter((value): value is string => typeof value === 'string') : base.diet,
+  };
+}
+
 export function WizardPage() {
   const navigate = useNavigate();
+  const { id: partyIdParam } = useParams();
   const [draft, setDraft] = useState<WizardDraft>(() => createDefaultDraft());
   const [activeStep, setActiveStep] = useState(0);
   const [completed, setCompleted] = useState<StepKey[]>([]);
@@ -74,10 +98,25 @@ export function WizardPage() {
   useEffect(() => {
     if (createdRef.current) return;
     createdRef.current = true;
+    if (partyIdParam) {
+      api.getParty(partyIdParam)
+        .then(({ party }) => {
+          setPartyId(party.id);
+          setDraft(draftFromState(party.wizardState));
+          const savedSteps = party.wizardState.steps && typeof party.wizardState.steps === 'object' ? party.wizardState.steps as Record<string, unknown> : {};
+          setCompleted(stepMeta.filter(({ key }) => {
+            const step = savedSteps[key];
+            return Boolean(step && typeof step === 'object' && (step as Record<string, unknown>).status === 'done');
+          }).map(({ key }) => key));
+          setSaveState('Loaded from saved draft');
+        })
+        .catch((loadError) => setError(loadError instanceof Error ? loadError.message : 'Could not open this draft.'));
+      return;
+    }
     api.createParty({ type: draft.basics.type, name: draft.basics.name || 'Untitled celebration', honoree: draft.basics.honoree, date: draft.basics.date, endTime: '22:00', guestCount: draft.guests.count, budgetTotal: draft.budget.total, currency: 'USD', wizardState: {} })
       .then(({ party }) => setPartyId(party.id))
       .catch((createError) => setError(createError instanceof Error ? createError.message : 'Could not start a party draft.'));
-  }, [draft.basics.date, draft.basics.honoree, draft.basics.name, draft.basics.type, draft.budget.total, draft.guests.count]);
+  }, [draft.basics.date, draft.basics.honoree, draft.basics.name, draft.basics.type, draft.budget.total, draft.guests.count, partyIdParam]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -122,7 +161,7 @@ export function WizardPage() {
   };
 
   const isLast = activeStep === stepMeta.length - 1;
-  return <div className="page-wrap wizard-page"><div className="wizard-heading"><div><div className="eyebrow">New celebration · draft</div><h1>Let’s make it memorable.</h1><p className="muted large">Every choice stays editable. We’ll keep the numbers honest and the ideas generous.</p></div><span className="save-status" aria-live="polite"><span className="status-dot" />{saveState}</span></div><div className="wizard-layout"><aside className="stepper" aria-label="Party plan steps"><ol>{stepMeta.map((item, index) => <li key={item.key}><button className={index === activeStep ? 'step-button active' : 'step-button'} onClick={() => setActiveStep(index)}><span className={`step-number ${completed.includes(item.key) ? 'done' : ''}`}>{completed.includes(item.key) ? '✓' : index + 1}</span><span><strong>{item.label}</strong><small>{staleSteps.includes(item.key) ? 'Needs a fresh look' : item.short}</small></span></button></li>)}</ol></aside><section className="wizard-main"><div className="wizard-step-header"><span className="step-kicker">Step {activeStep + 1} of {stepMeta.length}</span><h2>{current.label}</h2><p>{current.short}</p></div>{error && <div className="form-error" role="alert">{error}</div>}<div className="step-content">{renderStep(activeStep, draft, updateSection, setSection, recommendations)}</div><div className="wizard-footer"><button className="text-button" onClick={() => activeStep === 0 ? navigate('/dashboard') : setActiveStep((value) => value - 1)}>← Back</button>{isLast ? <button className="primary-button" onClick={generate} disabled={!partyId}>Generate my plan <span>✦</span></button> : <button className="primary-button" onClick={next}>Save & continue <span>→</span></button>}</div></section><aside className="estimate-panel"><div className="eyebrow">Live plan estimate</div><div className="estimate-total">{estimate ? formatMoney(estimate.total) : '—'}</div><p className="muted">Planning guidance · updates as you choose</p>{estimate && <div className="estimate-lines">{estimate.lines.filter((line) => line.subtotal > 0).slice(0, 5).map((line) => <div key={line.label}><span>{line.label}</span><strong>{formatMoney(line.subtotal)}</strong></div>)}</div>}<div className="estimate-note">ⓘ Your total includes a 10% contingency so surprises stay small.</div></aside></div></div>;
+  return <div className="page-wrap wizard-page"><div className="wizard-heading"><div><div className="eyebrow">{partyIdParam ? 'Edit celebration · draft' : 'New celebration · draft'}</div><h1>{partyIdParam ? 'Let’s refine the plan.' : 'Let’s make it memorable.'}</h1><p className="muted large">Every choice stays editable. We’ll keep the numbers honest and the ideas generous.</p></div><span className="save-status" aria-live="polite"><span className="status-dot" />{saveState}</span></div><div className="wizard-layout"><aside className="stepper" aria-label="Party plan steps"><ol>{stepMeta.map((item, index) => <li key={item.key}><button className={index === activeStep ? 'step-button active' : 'step-button'} onClick={() => setActiveStep(index)}><span className={`step-number ${completed.includes(item.key) ? 'done' : ''}`}>{completed.includes(item.key) ? '✓' : index + 1}</span><span><strong>{item.label}</strong><small>{staleSteps.includes(item.key) ? 'Needs a fresh look' : item.short}</small></span></button></li>)}</ol></aside><section className="wizard-main"><div className="wizard-step-header"><span className="step-kicker">Step {activeStep + 1} of {stepMeta.length}</span><h2>{current.label}</h2><p>{current.short}</p></div>{error && <div className="form-error" role="alert">{error}</div>}<div className="step-content">{renderStep(activeStep, draft, updateSection, setSection, recommendations)}</div><div className="wizard-footer"><button className="text-button" onClick={() => activeStep === 0 ? navigate('/dashboard') : setActiveStep((value) => value - 1)}>← Back</button>{isLast ? <button className="primary-button" onClick={generate} disabled={!partyId}>Generate my plan <span>✦</span></button> : <button className="primary-button" onClick={next}>Save & continue <span>→</span></button>}</div></section><aside className="estimate-panel"><div className="eyebrow">Live plan estimate</div><div className="estimate-total">{estimate ? formatMoney(estimate.total) : '—'}</div><p className="muted">Planning guidance · updates as you choose</p>{estimate && <div className="estimate-lines">{estimate.lines.filter((line) => line.subtotal > 0).slice(0, 5).map((line) => <div key={line.label}><span>{line.label}</span><strong>{formatMoney(line.subtotal)}</strong></div>)}</div>}<div className="estimate-note">ⓘ Your total includes a 10% contingency so surprises stay small.</div></aside></div></div>;
 }
 
 function renderStep(step: number, draft: WizardDraft, updateSection: <K extends keyof WizardDraft>(key: K, value: Partial<WizardDraft[K]>) => void, setSection: <K extends keyof WizardDraft>(key: K, value: WizardDraft[K]) => void, recommendations: Recommendations | null) {
