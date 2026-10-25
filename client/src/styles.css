@@ -277,6 +277,10 @@ input::placeholder { color: #afa3a6; }
 .idea-list { display: grid; gap: 1rem; margin-top: 1.5rem; }
 .idea-list span { color: var(--coral-dark); font-family: Georgia, serif; font-size: 1.15rem; }
 .idea-list b { color: var(--ink); font-family: inherit; font-size: 0.9rem; margin-left: 0.5rem; }
+.ask-form { display: grid; gap: 0.7rem; margin: 1rem 0; }
+.ask-form textarea { background: #fffaf2; border: 1px solid var(--line); border-radius: 0.7rem; color: var(--ink); padding: 0.75rem; resize: vertical; width: 100%; }
+.ai-answer { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 1rem; }
+.ai-answer p { color: var(--muted); line-height: 1.5; }
 .timeline-list { border-left: 1px solid #e1d1c8; margin: 1.5rem 0 0 0.5rem; padding-left: 1.4rem; }
 .timeline-item { align-items: center; display: flex; gap: 0.8rem; padding: 0.9rem 0; position: relative; }
 .timeline-item > span:nth-child(2) { flex: 1; }

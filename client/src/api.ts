@@ -131,4 +131,5 @@ export const api = {
   publicInvite: (token: string) => request<{ invite: { guestName: string; rsvp: string; diet: string; plusOneName: string; message: string; party: { id: string; name: string; type: string; honoree: string; date: string; endTime: string; guestCount: number } } }>(`/public/rsvp/${token}`),
   respondToInvite: (token: string, body: { rsvp: 'yes' | 'maybe' | 'no'; plusOneName?: string | undefined; plusOneDiet?: string | undefined; kidsCount?: number | undefined; message?: string | undefined }) => request<{ invite: { guestName: string; rsvp: string; entryToken?: string; party: { id: string; name: string; date: string; endTime: string } } }>(`/public/rsvp/${token}`, json(body)),
   checkIn: (partyId: string, entryToken: string) => request<{ status: string; guest: { name: string; plusOneName: string } }>(`/parties/${partyId}/checkin`, json({ entryToken })),
+  aiChat: (partyId: string, prompt: string) => request<{ source: 'offline' | 'claude'; text: string; ideas: string[] }>(`/ai/chat?partyId=${encodeURIComponent(partyId)}`, json({ prompt })),
 };

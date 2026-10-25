@@ -90,7 +90,19 @@ function TimelineTab({ tasks }: { tasks: Task[] }) {
 }
 
 function IdeasTab({ party }: { party: PartyDetail['party'] }) {
+  const [prompt, setPrompt] = useState('Give me three ideas that guests will remember.');
+  const [answer, setAnswer] = useState<{ source: string; text: string; ideas: string[] } | null>(null);
+  const [busy, setBusy] = useState(false);
   const theme = wizardValue(party, 'theme');
   const vibe = typeof theme.vibe === 'string' ? theme.vibe : 'Warm and joyful';
-  return <section className="ideas-grid"><div className="detail-card idea-card"><div className="eyebrow">Theme moodboard</div><h2>{vibe}</h2><p>Let the palette show up in one repeatable detail: menus, napkins, florals or the welcome sign.</p><div className="idea-palette"><span /><span /><span /><span /></div></div><div className="detail-card"><div className="eyebrow">Small touches</div><h2>Three ways to make it yours</h2><div className="idea-list"><span>1 <b>Give guests a guided arrival moment.</b></span><span>2 <b>Choose one signature bite or drink.</b></span><span>3 <b>Leave ten minutes unplanned.</b></span></div></div></section>;
+  const ask = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      setAnswer(await api.aiChat(party.id, prompt));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <section className="ideas-grid"><div className="detail-card idea-card"><div className="eyebrow">Theme moodboard</div><h2>{vibe}</h2><p>Let the palette show up in one repeatable detail: menus, napkins, florals or the welcome sign.</p><div className="idea-palette"><span /><span /><span /><span /></div></div><div className="detail-card"><div className="eyebrow">Ask celebrAItions</div><h2>Keep the ideas generous.</h2><form className="ask-form" onSubmit={ask}><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={3} aria-label="Ask celebrAItions" /><button className="secondary-button" disabled={busy}>{busy ? 'Thinking…' : 'Give me ideas ✦'}</button></form>{answer ? <div className="ai-answer"><span className="status-chip">{answer.source === 'offline' ? 'Offline ideas' : 'Claude ideas'}</span><p>{answer.text}</p><div className="idea-list">{answer.ideas.map((idea, index) => <span key={idea}>{index + 1} <b>{idea}</b></span>)}</div></div> : <div className="idea-list"><span>1 <b>Give guests a guided arrival moment.</b></span><span>2 <b>Choose one signature bite or drink.</b></span><span>3 <b>Leave ten minutes unplanned.</b></span></div>}</div></section>;
 }

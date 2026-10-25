@@ -22,6 +22,7 @@ import { PartyDatabase, type PartyRecord } from './db/database.js';
 import { clearSession, requireAuth, setSession, type AuthenticatedRequest } from './middleware/auth.js';
 import { errorHandler } from './middleware/errors.js';
 import { createEntryToken, verifyEntryToken } from './services/inviteService.js';
+import { generateCreativeResponse } from './services/aiService.js';
 
 const estimateSchema = z.object({
   eventType: partySchema.shape.type,
@@ -47,6 +48,7 @@ const rsvpSchema = z.object({
 });
 
 const checkinSchema = z.object({ entryToken: z.string().min(10) });
+const aiChatSchema = z.object({ prompt: z.string().trim().min(1).max(800) });
 
 const jsonObject = (value: unknown): Record<string, unknown> => (value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {});
 
@@ -248,6 +250,16 @@ export const createApp = (options: AppOptions = {}) => {
     if (!parsed.success) return validationError(response, parsed);
     const context: PlanningContext = { ...parsed.data, referenceDate: parsed.data.referenceDate ?? new Date().toISOString().slice(0, 10) };
     response.json({ estimate: estimateCost({ context }), recommendations: buildEventRecommendations(context) });
+  });
+
+  app.post('/api/v1/ai/chat', requireAuth, async (request: AuthenticatedRequest, response) => {
+    const parsed = aiChatSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(response, parsed);
+    const partyId = typeof request.query.partyId === 'string' ? request.query.partyId : '';
+    const party = database.getParty(userId(request), partyId);
+    if (!party) return response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Party not found.' } });
+    const result = await generateCreativeResponse({ eventType: party.type, partyName: party.name, prompt: parsed.data.prompt, guestCount: party.guestCount, budgetTier: typeof party.wizardState.budgetTier === 'string' ? party.wizardState.budgetTier : undefined });
+    response.json(result);
   });
 
   app.get('/api/v1/suggestions/:step', (_request, response) => {
