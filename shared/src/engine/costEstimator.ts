@@ -1,13 +1,13 @@
-import type { BarOption, CostEstimate, CostInputs, CostLine } from './types.js';
+import type { BarOption, BudgetTier, CostEstimate, CostInputs, CostLine } from './types.js';
 
-const DEFAULT_MENU_PRICE: Record<CostInputs['context']['budgetTier'], number> = {
+const DEFAULT_MENU_PRICE: Record<BudgetTier, number> = {
   essential: 24,
   balanced: 42,
   premium: 70,
   luxury: 115,
 };
 
-const DEFAULT_DECOR_BASE: Record<CostInputs['context']['budgetTier'], number> = {
+const DEFAULT_DECOR_BASE: Record<BudgetTier, number> = {
   essential: 400,
   balanced: 900,
   premium: 1_800,
@@ -22,8 +22,28 @@ const BAR_PRICE: Record<BarOption, number> = {
   none: 0,
 };
 
+const DEFAULT_VENUE_FLAT_FEE = 1_200;
+const DEFAULT_VENUE_PRICE_PER_HEAD = 6;
+const DEFAULT_PRINT_INVITE_COST = 2.5;
+const DEFAULT_FAVOR_UNIT_COST = 3;
+
 function round(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function createCostLine(
+  category: string,
+  label: string,
+  quantity: number,
+  unitCost: number,
+): CostLine {
+  return {
+    category,
+    label,
+    quantity,
+    unitCost: round(unitCost),
+    subtotal: round(quantity * unitCost),
+  };
 }
 
 function isWeekend(date: string): boolean {
@@ -45,71 +65,45 @@ export function estimateCost(inputs: CostInputs): CostEstimate {
   const barOption = inputs.barOption ?? 'none';
   const barGuests = barOption === 'none' ? 0 : Math.max(0, guests - context.ageMix.kids);
   const drinksPerGuest = Math.max(0, 2 + Math.max(0, context.durationHours - 1));
+  const venueFlatFee = inputs.venueFlatFee ?? DEFAULT_VENUE_FLAT_FEE;
+  const venuePricePerHead = inputs.venuePricePerHead ?? DEFAULT_VENUE_PRICE_PER_HEAD;
+  const barPricePerDrink = inputs.barPricePerDrink ?? BAR_PRICE[barOption];
+  const decorCost =
+    (inputs.decorComplexity ?? 1) *
+    (DEFAULT_DECOR_BASE[context.budgetTier] ?? 900) *
+    Math.sqrt(Math.max(guests, 1) / 50);
+  const mediaCost =
+    inputs.mediaCost ??
+    (context.budgetTier === 'essential' ? 650 : context.budgetTier === 'luxury' ? 3_000 : 1_400);
+  const attireAllowance = inputs.attireAllowance ?? (context.eventType === 'wedding' ? 2_000 : 400);
+  const printInviteCost = inputs.printInviteCost ?? DEFAULT_PRINT_INVITE_COST;
+  const favorUnitCost = inputs.favorUnitCost ?? DEFAULT_FAVOR_UNIT_COST;
 
   const lines: CostLine[] = [
-    {
-      category: 'Food & Beverage',
-      label: 'Menu package',
-      quantity: guests,
-      unitCost: round(menuPrice * factor),
-      subtotal: round(guests * menuPrice * factor),
-    },
-    {
-      category: 'Venue & Logistics',
-      label: 'Venue rental',
-      quantity: 1,
-      unitCost: round(inputs.venueFlatFee ?? 1_200),
-      subtotal: round(inputs.venueFlatFee ?? 1_200),
-    },
-    {
-      category: 'Venue & Logistics',
-      label: 'Venue guest fee',
-      quantity: guests,
-      unitCost: round((inputs.venuePricePerHead ?? 6) * factor),
-      subtotal: round(guests * (inputs.venuePricePerHead ?? 6) * factor),
-    },
-    {
-      category: 'Food & Beverage',
-      label: barOption === 'none' ? 'Bar' : `${barOption} drinks`,
-      quantity: barGuests * drinksPerGuest,
-      unitCost: round(inputs.barPricePerDrink ?? BAR_PRICE[barOption]),
-      subtotal: round(barGuests * drinksPerGuest * (inputs.barPricePerDrink ?? BAR_PRICE[barOption])),
-    },
-    {
-      category: 'Décor & Theme',
-      label: 'Decor and styling',
-      quantity: 1,
-      unitCost: round((inputs.decorComplexity ?? 1) * (DEFAULT_DECOR_BASE[context.budgetTier] ?? 900) * Math.sqrt(Math.max(guests, 1) / 50)),
-      subtotal: round((inputs.decorComplexity ?? 1) * (DEFAULT_DECOR_BASE[context.budgetTier] ?? 900) * Math.sqrt(Math.max(guests, 1) / 50)),
-    },
-    {
-      category: 'Entertainment & Media',
-      label: 'Photo and music',
-      quantity: 1,
-      unitCost: round(inputs.mediaCost ?? (context.budgetTier === 'essential' ? 650 : context.budgetTier === 'luxury' ? 3_000 : 1_400)),
-      subtotal: round(inputs.mediaCost ?? (context.budgetTier === 'essential' ? 650 : context.budgetTier === 'luxury' ? 3_000 : 1_400)),
-    },
-    {
-      category: 'Attire & Beauty',
-      label: 'Host and honoree allowance',
-      quantity: 1,
-      unitCost: round(inputs.attireAllowance ?? (context.eventType === 'wedding' ? 2_000 : 400)),
-      subtotal: round(inputs.attireAllowance ?? (context.eventType === 'wedding' ? 2_000 : 400)),
-    },
-    {
-      category: 'Guests & Invitations',
-      label: inputs.digitalInvites === false ? 'Printed invitations' : 'Digital invitations',
-      quantity: guests,
-      unitCost: inputs.digitalInvites === false ? round(inputs.printInviteCost ?? 2.5) : 0,
-      subtotal: inputs.digitalInvites === false ? round(guests * (inputs.printInviteCost ?? 2.5)) : 0,
-    },
-    {
-      category: 'Gifts & Favors',
-      label: inputs.favorsEnabled ? 'Guest favors' : 'Favors',
-      quantity: inputs.favorsEnabled ? guests : 0,
-      unitCost: inputs.favorsEnabled ? round(inputs.favorUnitCost ?? 3) : 0,
-      subtotal: inputs.favorsEnabled ? round(guests * (inputs.favorUnitCost ?? 3)) : 0,
-    },
+    createCostLine('Food & Beverage', 'Menu package', guests, menuPrice * factor),
+    createCostLine('Venue & Logistics', 'Venue rental', 1, venueFlatFee),
+    createCostLine('Venue & Logistics', 'Venue guest fee', guests, venuePricePerHead * factor),
+    createCostLine(
+      'Food & Beverage',
+      barOption === 'none' ? 'Bar' : `${barOption} drinks`,
+      barGuests * drinksPerGuest,
+      barPricePerDrink,
+    ),
+    createCostLine('Décor & Theme', 'Decor and styling', 1, decorCost),
+    createCostLine('Entertainment & Media', 'Photo and music', 1, mediaCost),
+    createCostLine('Attire & Beauty', 'Host and honoree allowance', 1, attireAllowance),
+    createCostLine(
+      'Guests & Invitations',
+      inputs.digitalInvites === false ? 'Printed invitations' : 'Digital invitations',
+      guests,
+      inputs.digitalInvites === false ? printInviteCost : 0,
+    ),
+    createCostLine(
+      'Gifts & Favors',
+      inputs.favorsEnabled ? 'Guest favors' : 'Favors',
+      inputs.favorsEnabled ? guests : 0,
+      inputs.favorsEnabled ? favorUnitCost : 0,
+    ),
   ];
 
   const subtotal = round(lines.reduce((sum, line) => sum + line.subtotal, 0));
